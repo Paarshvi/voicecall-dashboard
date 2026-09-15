@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from database import SessionLocal
 from models import Call
+from call_queue import call_queue
+from worker import process_call
 
 app = FastAPI()
 def get_db():
@@ -51,6 +53,8 @@ def create_call(call: CallCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_call)
 
+    call_queue.enqueue(process_call, new_call.id)
+
     return new_call
 
 @app.patch("/calls/{call_id}")
@@ -70,3 +74,15 @@ def update_call_status(
     db.refresh(call)
 
     return call
+
+@app.delete("/calls/{call_id}")
+def delete_call(call_id: int, db: Session = Depends(get_db)):
+    call = db.query(Call).filter(Call.id == call_id).first()
+
+    if not call:
+        return {"message": "Call not found"}
+
+    db.delete(call)
+    db.commit()
+
+    return {"message": "Call deleted"}
